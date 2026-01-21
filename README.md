@@ -1,97 +1,84 @@
-Event-Driven Integration Lab (AWS Console Only)
-Overview
+# Event-Driven Integration Lab (AWS Console Only)
 
-A serverless, event-driven pipeline built entirely through the AWS Console using only Free Tier services.
-This architecture connects S3 → Lambda → DynamoDB → CloudWatch → SNS to demonstrate real-time event processing, monitoring, and alerting.
+## Overview
+This lab demonstrates a fully serverless, event-driven integration pipeline built entirely through the AWS Management Console using Free Tier services. The architecture connects **S3 → Lambda → DynamoDB → CloudWatch → SNS** to process events in real time and provide monitoring and alerting.
 
-Architecture Flow
+---
+
+## Architecture
 S3 Upload → Lambda Trigger → DynamoDB Write → CloudWatch Monitoring → SNS Alert
 
-Components
-Service	Purpose
-S3	Event source (object upload triggers Lambda)
-Lambda	Processes S3 event and writes to DynamoDB
-DynamoDB	Stores metadata and TTL cleanup
-CloudWatch Logs	Lambda execution logs
-CloudWatch Alarms	Monitoring and alerting
-SNS	Sends email alerts when alarms trigger
-Features
+yaml
+Copy code
 
-Console-only setup (no CLI)
+---
 
-Free Tier safe
+## Components
 
-Event-driven architecture
+| Service | Role |
+|--------|------|
+| **S3** | Event source (object uploads trigger Lambda) |
+| **Lambda** | Processes S3 events and writes metadata to DynamoDB |
+| **DynamoDB** | Stores event records and automatically expires them via TTL |
+| **CloudWatch Logs** | Logs Lambda execution and diagnostics |
+| **CloudWatch Alarms** | Monitors DynamoDB activity and throttling |
+| **SNS** | Sends email notifications when alarms trigger |
 
-DynamoDB TTL enabled
+---
 
-CloudWatch monitoring & alarms
+## Features
+- Console-only deployment (no CLI / no Terraform)
+- Free Tier safe
+- Real-time event-driven processing
+- DynamoDB TTL for automatic cleanup
+- CloudWatch monitoring + alerting
+- SNS email notifications
 
-SNS email notifications
+---
 
-Setup Steps (Completed)
+## Setup Summary (Completed)
 
-SNS Topic
+### 1. SNS Topic
+- Topic: `event-driven-alerts`
+- Email subscription added
+- Tag: `Environment=Lab`
 
-event-driven-alerts
+### 2. DynamoDB Table
+- Table: `S3ObjectEvents`
+- Partition key: `objectId (String)`
+- Streams enabled: **New image**
+- TTL enabled: `ttl` (24-hour expiry)
 
-Email subscription added
+### 3. IAM Role
+- Role: `Lambda-S3-DDB-Role`
+- Policies attached:
+  - `AWSLambdaBasicExecutionRole`
+  - `AmazonDynamoDBFullAccess`
+  - `AmazonS3ReadOnlyAccess`
 
-DynamoDB
+### 4. Lambda Function
+- Function: `S3ToDynamoProcessor`
+- Runtime: **Python 3.12**
+- Handler: `lambda_function.lambda_handler`
+- Role: `Lambda-S3-DDB-Role`
+- Writes records to DynamoDB with TTL
 
-Table: S3ObjectEvents
+### 5. S3 Bucket
+- Bucket: `event-driven-lab-pauljancen`
+- Event notification configured: **All object create events**
+- Trigger linked to Lambda
 
-Partition key: objectId
+### 6. CloudWatch Alarms
+| Alarm | Metric | Purpose |
+|------|--------|---------|
+| `DynamoDBWriteActivityAlert` | `ConsumedWriteCapacityUnits` | Monitors write activity |
+| `DynamoDBWriteThrottleAlert` | `WriteThrottleEvents` | Detects throttling |
 
-Streams enabled (New image)
+---
 
-TTL enabled (24 hours)
+## Lambda Code (Python 3.12)
 
-IAM Role
-
-Lambda-S3-DDB-Role
-
-Policies:
-
-AWSLambdaBasicExecutionRole
-
-AmazonDynamoDBFullAccess
-
-AmazonS3ReadOnlyAccess
-
-Lambda Function
-
-S3ToDynamoProcessor
-
-Runtime: Python 3.12
-
-Handler: lambda_function.lambda_handler
-
-Writes records to DynamoDB with TTL
-
-S3 Bucket
-
-event-driven-lab-pauljancen
-
-Event trigger configured (All object create events)
-
-CloudWatch Alarms
-
-DynamoDBWriteActivityAlert (ConsumedWriteCapacityUnits)
-
-DynamoDBWriteThrottleAlert (WriteThrottleEvents)
-
-Verification
-
-Upload file to S3 bucket.
-
-Verify DynamoDB item created.
-
-Check CloudWatch Logs for successful Lambda execution.
-
-Confirm CloudWatch alarm triggers and SNS email notification.
-
-Lambda Code (Python 3.12)
+```python
 import json
 import boto3
 import uuid
@@ -114,3 +101,50 @@ def lambda_handler(event, context):
             }
         )
     return {'statusCode': 200, 'body': json.dumps('Item stored')}
+Verification Steps
+1. Upload Test File
+Upload a file to the S3 bucket:
+
+event-driven-lab-pauljancen
+
+2. Confirm DynamoDB Item
+Go to DynamoDB:
+
+Table: S3ObjectEvents
+
+Verify a new record exists with fields:
+
+objectId
+
+bucket
+
+objectKey
+
+timestamp
+
+ttl
+
+3. Check CloudWatch Logs
+Go to:
+
+Lambda → Monitor → View logs in CloudWatch
+Verify:
+
+Invocation succeeded
+
+No errors
+
+Status code 200
+
+4. Confirm Alarm & SNS
+Go to CloudWatch Alarms:
+
+Ensure both alarms exist
+
+Check state (OK / Insufficient data)
+
+Go to SNS:
+
+Confirm subscription email is confirmed
+
+Receive email when alarms trigger
